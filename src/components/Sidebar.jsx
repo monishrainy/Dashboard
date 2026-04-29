@@ -1,4 +1,5 @@
-import { LayoutDashboard, PlusCircle, History, Lightbulb, Wallet, BarChart2 } from 'lucide-react'
+import { LayoutDashboard, PlusCircle, History, Lightbulb, Wallet, BarChart2, LogOut } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard',    icon: LayoutDashboard },
@@ -9,6 +10,8 @@ const navItems = [
 ]
 
 export default function Sidebar({ activeTab, setActiveTab }) {
+  const { currentUser, logout } = useAuth()
+
   return (
     <div className="w-60 flex flex-col h-full flex-shrink-0" style={{ background: '#ede9fe', borderRight: '1px solid #ddd6fe' }}>
       <div className="p-5" style={{ borderBottom: '1px solid #ddd6fe' }}>
@@ -43,8 +46,30 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         ))}
       </nav>
 
-      <div className="p-4" style={{ borderTop: '1px solid #ddd6fe' }}>
-        <p className="text-xs text-center" style={{ color: '#c4b5fd' }}>Data stored locally in browser</p>
+      {/* User info + logout */}
+      <div className="p-4 space-y-3" style={{ borderTop: '1px solid #ddd6fe' }}>
+        {currentUser && (
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+              style={{ background: '#8b5cf6', color: '#fff' }}>
+              {currentUser.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold truncate" style={{ color: '#3b0764' }}>{currentUser.name}</p>
+              <p className="text-xs truncate" style={{ color: '#a78bfa' }}>{currentUser.email}</p>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all"
+          style={{ color: '#be185d', background: '#fce7f3' }}
+          onMouseEnter={e => e.currentTarget.style.background = '#fbcfe8'}
+          onMouseLeave={e => e.currentTarget.style.background = '#fce7f3'}
+        >
+          <LogOut size={15} />
+          Sign out
+        </button>
       </div>
     </div>
   )

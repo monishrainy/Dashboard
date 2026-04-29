@@ -154,20 +154,22 @@ export const GROUP_IDEALS = {
   'Other':         0.02,
 }
 
-export function BudgetProvider({ children }) {
+export function BudgetProvider({ children, userId = 'default' }) {
+  const k = (name) => `${name}_${userId}`
+
   const [entries, setEntries] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('budget_entries')) || [] } catch { return [] }
+    try { return JSON.parse(localStorage.getItem(k('budget_entries'))) || [] } catch { return [] }
   })
   const [incomeData, setIncomeData] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('budget_income')) || {} } catch { return {} }
+    try { return JSON.parse(localStorage.getItem(k('budget_income'))) || {} } catch { return {} }
   })
   const [currency, setCurrencyState] = useState(() => {
-    return localStorage.getItem('budget_currency') || 'GBP'
+    return localStorage.getItem(k('budget_currency')) || 'GBP'
   })
 
-  useEffect(() => { localStorage.setItem('budget_entries', JSON.stringify(entries)) }, [entries])
-  useEffect(() => { localStorage.setItem('budget_income', JSON.stringify(incomeData)) }, [incomeData])
-  useEffect(() => { localStorage.setItem('budget_currency', currency) }, [currency])
+  useEffect(() => { localStorage.setItem(k('budget_entries'), JSON.stringify(entries)) }, [entries])
+  useEffect(() => { localStorage.setItem(k('budget_income'), JSON.stringify(incomeData)) }, [incomeData])
+  useEffect(() => { localStorage.setItem(k('budget_currency'), currency) }, [currency])
 
   const addEntry = (entry) => {
     const newEntry = {
