@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 
 const BudgetContext = createContext(null)
 
@@ -154,46 +155,105 @@ export const GROUP_IDEALS = {
   'Other':         0.02,
 }
 
-export function BudgetProvider({ children, userId = 'default' }) {
-  const k = (name) => `${name}_${userId}`
+const mapEntry = (row) => ({
+  id:            row.id,
+  type:          row.type,
+  subcategory:   row.subcategory,
+  categoryGroup: row.category_group,
+  amount:        parseFloat(row.amount),
+  date:          row.date,
+  description:   row.description || '',
+  month:         row.month,
+})
 
-  const [entries, setEntries] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(k('budget_entries'))) || [] } catch { return [] }
-  })
-  const [incomeData, setIncomeData] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(k('budget_income'))) || {} } catch { return {} }
-  })
-  const [currency, setCurrencyState] = useState(() => {
-    return localStorage.getItem(k('budget_currency')) || 'GBP'
-  })
+export function BudgetProvider({ children, userId }) {
+  const [entries,    setEntries]    = useState([])
+  const [incomeData, setIncomeData] = useState({})
+  const [currency,   setCurrencyState] = useState('GBP')
+  const [loading,    setLoading]    = useState(true)
 
-  useEffect(() => { localStorage.setItem(k('budget_entries'), JSON.stringify(entries)) }, [entries])
-  useEffect(() => { localStorage.setItem(k('budget_income'), JSON.stringify(incomeData)) }, [incomeData])
-  useEffect(() => { localStorage.setItem(k('budget_currency'), currency) }, [currency])
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
 
-  const addEntry = (entry) => {
-    const newEntry = {
-      ...entry,
-      id: Date.now().toString() + Math.random().toString(36).slice(2),
-      month: entry.date.substring(0, 7),
+    const load = async () => {
+      setLoading(true)
+      const [entriesRes, incomeRes, settingsRes] = await Promise.all([
+        supabase.from('entries').select('*').eq('user_id', userId).order('date', { ascending: false }),
+        supabase.from('income_data').select('*').eq('user_id', userId),
+        supabase.from('user_settings').select('currency').eq('user_id', userId).single(),
+      ])
+      if (cancelled) return
+
+      if (entriesRes.data)  setEntries(entriesRes.data.map(mapEntry))
+      if (incomeRes.data) {
+        const inc = {}
+        incomeRes.data.forEach(r => { inc[r.month] = parseFloat(r.amount) })
+        setIncomeData(inc)
+      }
+      if (settingsRes.data) setCurrencyState(settingsRes.data.currency)
+      setLoading(false)
     }
-    setEntries(prev => [newEntry, ...prev])
+
+    load()
+    return () => { cancelled = true }
+  }, [userId])
+
+  const addEntry = async (entry) => {
+    const tempId = 'temp_' + Date.now()
+    const optimistic = { id: tempId, ...entry, categoryGroup: entry.type === 'expense' ? entry.categoryGroup : undefined, month: entry.date.substring(0, 7) }
+    setEntries(prev => [optimistic, ...prev])
+
+    const { data } = await supabase.from('entries').insert({
+      user_id:        userId,
+      type:           entry.type,
+      subcategory:    entry.subcategory,
+      category_group: entry.type === 'expense' ? (entry.categoryGroup || null) : null,
+      amount:         entry.amount,
+      date:           entry.date,
+      description:    entry.description || '',
+      month:          entry.date.substring(0, 7),
+    }).select().single()
+
+    if (data) setEntries(prev => prev.map(e => e.id === tempId ? mapEntry(data) : e))
+    else      setEntries(prev => prev.filter(e => e.id !== tempId))
   }
 
-  const updateEntry = (id, updates) => {
-    setEntries(prev => prev.map(e =>
-      e.id === id
-        ? { ...e, ...updates, month: (updates.date || e.date).substring(0, 7) }
-        : e
-    ))
+  const updateEntry = async (id, updates) => {
+    setEntries(prev => prev.map(e => e.id === id ? { ...e, ...updates, month: (updates.date || e.date).substring(0, 7) } : e))
+
+    await supabase.from('entries').update({
+      type:           updates.type,
+      subcategory:    updates.subcategory,
+      category_group: updates.type === 'expense' ? (updates.categoryGroup || null) : null,
+      amount:         updates.amount,
+      date:           updates.date,
+      description:    updates.description || '',
+      month:          (updates.date || '').substring(0, 7),
+    }).eq('id', id).eq('user_id', userId)
   }
 
-  const deleteEntry = (id) => setEntries(prev => prev.filter(e => e.id !== id))
+  const deleteEntry = async (id) => {
+    setEntries(prev => prev.filter(e => e.id !== id))
+    await supabase.from('entries').delete().eq('id', id).eq('user_id', userId)
+  }
 
-  const setCurrency = (code) => setCurrencyState(code)
+  const setMonthlyIncome = async (month, amount) => {
+    const val = parseFloat(amount) || 0
+    setIncomeData(prev => ({ ...prev, [month]: val }))
+    await supabase.from('income_data').upsert(
+      { user_id: userId, month, amount: val },
+      { onConflict: 'user_id,month' }
+    )
+  }
 
-  const setMonthlyIncome = (month, amount) =>
-    setIncomeData(prev => ({ ...prev, [month]: parseFloat(amount) || 0 }))
+  const setCurrency = async (code) => {
+    setCurrencyState(code)
+    await supabase.from('user_settings').upsert(
+      { user_id: userId, currency: code },
+      { onConflict: 'user_id' }
+    )
+  }
 
   const getMonthEntries = (month) => entries.filter(e => e.month === month)
 
@@ -207,7 +267,7 @@ export function BudgetProvider({ children, userId = 'default' }) {
 
   return (
     <BudgetContext.Provider value={{
-      entries, incomeData, currency,
+      entries, incomeData, currency, loading,
       addEntry, updateEntry, deleteEntry,
       setCurrency, setMonthlyIncome,
       getMonthEntries, getAllMonths, getCurrentMonth,

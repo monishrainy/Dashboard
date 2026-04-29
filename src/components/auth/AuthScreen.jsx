@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Wallet, Eye, EyeOff, User, Mail, Lock } from 'lucide-react'
+import { Wallet, Eye, EyeOff, User, Mail, Lock, MailCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 const inputStyle = {
@@ -46,6 +46,32 @@ function PasswordField({ label, value, onChange, placeholder = 'Enter password' 
   return <Field icon={Lock} label={label} type={show ? 'text' : 'password'} value={value} onChange={onChange} placeholder={placeholder} rightEl={toggle} />
 }
 
+function VerificationSent({ email, onBack }) {
+  return (
+    <div className="text-center space-y-4">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mx-auto"
+        style={{ background: '#d1fae5' }}>
+        <MailCheck size={30} style={{ color: '#10b981' }} />
+      </div>
+      <div>
+        <h3 className="font-bold text-lg" style={{ color: '#3b0764' }}>Check your inbox</h3>
+        <p className="text-sm mt-2" style={{ color: '#6b7280' }}>
+          We sent a verification link to<br />
+          <span className="font-semibold" style={{ color: '#7c3aed' }}>{email}</span>
+        </p>
+        <p className="text-xs mt-3" style={{ color: '#9ca3af' }}>
+          Click the link in the email to activate your account, then come back and sign in.
+        </p>
+      </div>
+      <button type="button" onClick={onBack}
+        className="w-full py-3 rounded-xl text-sm font-semibold"
+        style={{ background: '#8b5cf6', color: '#fff', boxShadow: '0 4px 14px rgba(139,92,246,0.35)' }}>
+        Back to Sign In
+      </button>
+    </div>
+  )
+}
+
 function LoginForm({ onSwitch }) {
   const { login } = useAuth()
   const [email,    setEmail]    = useState('')
@@ -57,7 +83,7 @@ function LoginForm({ onSwitch }) {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const result = login(email, password)
+    const result = await login(email, password)
     setLoading(false)
     if (result.error) setError(result.error)
   }
@@ -81,7 +107,7 @@ function LoginForm({ onSwitch }) {
 
       <p className="text-center text-sm" style={{ color: '#9ca3af' }}>
         Don't have an account?{' '}
-        <button type="button" onClick={onSwitch} className="font-semibold" style={{ color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer' }}>
+        <button type="button" onClick={onSwitch} style={{ color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
           Create one
         </button>
       </p>
@@ -91,24 +117,28 @@ function LoginForm({ onSwitch }) {
 
 function RegisterForm({ onSwitch }) {
   const { register } = useAuth()
-  const [name,     setName]     = useState('')
-  const [email,    setEmail]    = useState('')
-  const [password, setPassword] = useState('')
-  const [confirm,  setConfirm]  = useState('')
-  const [error,    setError]    = useState('')
-  const [loading,  setLoading]  = useState(false)
+  const [name,             setName]             = useState('')
+  const [email,            setEmail]            = useState('')
+  const [password,         setPassword]         = useState('')
+  const [confirm,          setConfirm]          = useState('')
+  const [error,            setError]            = useState('')
+  const [loading,          setLoading]          = useState(false)
+  const [verificationSent, setVerificationSent] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    if (name.trim().length < 2)            return setError('Please enter your full name.')
-    if (password.length < 6)               return setError('Password must be at least 6 characters.')
-    if (password !== confirm)              return setError('Passwords do not match.')
+    if (name.trim().length < 2)   return setError('Please enter your full name.')
+    if (password.length < 6)      return setError('Password must be at least 6 characters.')
+    if (password !== confirm)     return setError('Passwords do not match.')
     setLoading(true)
-    const result = register(name, email, password)
+    const result = await register(name, email, password)
     setLoading(false)
-    if (result.error) setError(result.error)
+    if (result.error)              return setError(result.error)
+    if (result.needsVerification)  setVerificationSent(true)
   }
+
+  if (verificationSent) return <VerificationSent email={email} onBack={onSwitch} />
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -131,7 +161,7 @@ function RegisterForm({ onSwitch }) {
 
       <p className="text-center text-sm" style={{ color: '#9ca3af' }}>
         Already have an account?{' '}
-        <button type="button" onClick={onSwitch} className="font-semibold" style={{ color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer' }}>
+        <button type="button" onClick={onSwitch} style={{ color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
           Sign in
         </button>
       </p>
@@ -144,12 +174,10 @@ export default function AuthScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #faf5ff 100%)' }}>
-      {/* Decorative blobs */}
       <div style={{ position: 'fixed', top: '-10%', right: '-5%', width: '400px', height: '400px', borderRadius: '50%', background: 'rgba(139,92,246,0.08)', pointerEvents: 'none' }} />
       <div style={{ position: 'fixed', bottom: '-10%', left: '-5%', width: '350px', height: '350px', borderRadius: '50%', background: 'rgba(167,139,250,0.07)', pointerEvents: 'none' }} />
 
       <div className="w-full" style={{ maxWidth: '420px', position: 'relative', zIndex: 1 }}>
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
             style={{ background: '#8b5cf6', boxShadow: '0 8px 24px rgba(139,92,246,0.35)' }}>
@@ -159,7 +187,6 @@ export default function AuthScreen() {
           <p className="text-sm mt-1" style={{ color: '#a78bfa' }}>Smart personal finance tracking</p>
         </div>
 
-        {/* Tab toggle */}
         <div className="flex p-1 rounded-2xl mb-6" style={{ background: '#ede9fe' }}>
           {['login', 'register'].map(m => (
             <button key={m} type="button" onClick={() => setMode(m)}
@@ -173,7 +200,6 @@ export default function AuthScreen() {
           ))}
         </div>
 
-        {/* Card */}
         <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #ede9fe', padding: '28px', boxShadow: '0 4px 24px rgba(139,92,246,0.1)' }}>
           {mode === 'login'
             ? <LoginForm    onSwitch={() => setMode('register')} />
@@ -182,7 +208,7 @@ export default function AuthScreen() {
         </div>
 
         <p className="text-center text-xs mt-6" style={{ color: '#c4b5fd' }}>
-          Your data is stored locally in your browser
+          Your data is securely stored in the cloud
         </p>
       </div>
     </div>
